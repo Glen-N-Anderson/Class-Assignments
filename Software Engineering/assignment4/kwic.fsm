@@ -1,0 +1,28 @@
+begin: constructor
+
+state: constructor
+callConstructor -> addText
+
+state: addText
+callAddText -> options
+
+state: options
+callAddText -> options
+callIndex -> returnIndex
+callListPairs -> returnPairs
+callReset -> addText 
+
+state: returnIndex
+callAddText -> options
+callIndex -> returnIndex
+callListPairs -> returnPairs
+callReset -> addText
+
+state: returnPairs
+callAddText -> options
+callIndex -> returnIndex
+callListPairs -> returnPairs
+callReset -> addText
+
+
+
