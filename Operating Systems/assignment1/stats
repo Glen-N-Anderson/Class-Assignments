@@ -1,0 +1,142 @@
+#!/bin/bash
+
+
+#Written by: Glen Anderson
+#CS344
+#10/13/2016
+#References:
+#http://stackoverflow.com/questions/8629330/unix-count-of-columns-in-file 
+#CS344 class slides
+#
+datafilepath="datafile$$"
+
+trap "rm -f "datafile$$" $mediansfile $meansfile $tempfile" SIGTERM SIGHUP SIGINT EXIT #will activate when program exits and clean the directory of temporaryfiles
+
+if [ "$#" = "1" ] #the variable $# checks the number of arguments in the execution line. We can use this to get and check values from this line.
+then
+        cat > "$datafilepath" #Get input from a catted file path instead of a provided file
+elif [ "$#" = "2" ] #Use file provided in the execution line
+then
+        datafilepath=$2 #assign datafilepath to be the this argument if it exists
+else
+	echo "Usage: stats {-rows|-cols} [file]" 1>&2 #usage error if the input does not fall into categories above
+	exit 1 #exit with status 1 as an error has occured
+fi
+
+if [ ! -r $datafilepath ]; #check to see if the file is readable.
+then
+        echo "FILE NOT READABLE" 1>&2 #Print that file is not readable to standard error
+        exit 1
+
+
+elif [ ! -s $datafilepath ]; #Check to see if file is empty, if it is, print error to standard error.
+then
+        echo "FILE IS EMPTY" 1>&2
+	exit 1
+fi
+
+
+
+if [[ $1 == -r* ]]; #Check if rows are the argument provided. The way I programmed this assignment was by doing rows first, then making columns work for the code I had at that point for rows. As such, we don't do much if rows are given. We just echo what will later be the top of the output.
+then
+	echo "Average Median"
+elif [[ $1 == -c* ]]; #If this argument is cols, we need to do some things to get the input to be accepted by the rest of the program.
+then
+	numcols=$(awk -F'\t' '{print NF; exit}' $datafilepath) #Get the number of columns using awk, we will use this later to loop through cols
+        meansfile="meansfile$$" #Initialize a file that will later hold the means for columns (only way I could get the format to work)
+	mediansfile="mediansfile$$" #Essentially the same as above but for medians.
+	echo "Averages:" > $meansfile	#This stores initial content in files as well as creates them so that we can later append the means/medians
+	echo "Medians: " > $mediansfile
+
+#turn the columns into rows so that fileline effectively stores a column as a row
+	for((i=1;i <= $numcols + 1; i++)) #Iterate through every column 
+	do
+		awk '{print $'$i'}' $datafilepath | tr '\n' '\t' #Change every column into a row so that it may be processed by the code below
+		echo	
+	done > "tempfile$$" #Store the results of the for loop in this tempfile and assign our new datafilepath to be this file.
+	datafilepath="tempfile$$"
+else
+	echo "Usage: stats {-rows|-cols} [file]" 1>&2 #Usage error if neither -r nor -c are provided as arguments
+	exit 1
+
+fi
+#else exit with an error
+while read fileline #Read lines until the file is empty
+do
+	sum=0
+        mean=0
+        median=0
+        count=0
+        count2=0
+        odd=0
+	halfcount=0	
+	rem=0
+	linearray=()
+	sorted=()
+	medians=()
+	means=()	
+
+	for i in $fileline #For every number in a row
+        do
+        	sum=$(expr $sum + $i) #Add each number in a row
+        	((count++))	#Increment count, we can use this later to calculate mean/median
+	done
+	if [[ $(expr $count % 2) == 1 ]] #If the remainder of count is 1, we must have an odd number and must specify the larger of the two numbers for median. 
+	then	
+		midindex=$((($count + 1) / 2)) #We add 1 here so that the larger of the two indexes is chosen 
+	else
+		midindex=$(($count / 2)) 
+
+	fi
+	linearray=($fileline) #make an array with fileline so that we can sort
+        readarray -t sorted < <(for i in "${linearray[@]}"; do echo "$i";done | sort) #This will read the linearray and sort it element by element so we can get the median from the sorted list
+	medians=(${sorted[$midindex]}) #assign array of medians, each median stored in the array so it can be accessed later
+
+        
+	
+
+
+        if [[ $count == 0 ]]; #This was added due to a divide by zero error on count caused by an extra run of the while loop
+	then
+		break
+	fi
+	mean=$((($sum + $count / 2) / $count)) #calculates the mean
+        
+	means=($mean) #Stores each mean into an array so that we can access them later
+	
+	if [[ $1 == -r* ]]; #Check once more if rows were specified to determine how to handle output
+	then
+		for((i=0; i <= ${#means[@]};i+=2)) #We can skip the tabs here, so we do i+=2
+		do
+			echo   "${means[i]}      " "${medians[i]}" #print means and medians on same line side by side
+		done
+	elif [[ $1 == -c* ]]; #Check if cols were specified to determine how to handle output
+	then
+		for((i=0; i <= ${#means[@]};i+=2)) #We go through each element of the means array so we can put it into a file
+        	do
+        		printf "%s       " "${means[i]}" >> $meansfile #Put the means into a meansfile so that we can display column's stats properly                
+		done
+		for((i=0; i <= ${#means[@]};i+=2)) #Same as above, but for medians (arrays are same length, so we can use #means here)
+		do
+			printf "%s       " "${medians[i]}" >> $mediansfile
+		
+		done
+
+
+	fi
+
+done < $datafilepath #Stop the while loop after we have read the file
+
+
+if [[ $1 == -c* ]]; #Since columns use some extra files, we need to remove them now that we are done using them. If cols is argument specified, we remove special files at the end.
+then
+	cat $meansfile #Print results of column means
+	echo #Echo statements ensure that the output stays in the lines we want it in
+	cat $mediansfile #Print results of column medians
+	echo
+
+	rm "meansfile$$" #Removing our files once we have finished with them.
+	rm "mediansfile$$"
+	rm "tempfile$$"
+fi
+
